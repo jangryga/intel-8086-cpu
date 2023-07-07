@@ -1,25 +1,27 @@
 pub struct Decoder;
 
-pub struct ParsedOutput {
-    pub opcode: Opcode,
-    pub direction: Destination,
-    pub operation: Operation,
-    pub mode: Mode,
+#[derive(Debug)]
+pub struct ParsedInput {
+    pub opcode: u8,
+    pub d: u8,
+    pub w: u8,
+    pub mode: u8,
     pub reg: u8,
+    pub rm: u8
 }
 
 impl Decoder {
-    pub fn read_instruction_stream(input: &Vec<u8>) -> ParsedOutput {
-        ParsedOutput {
-            opcode: get_opcode(&input[0]).unwrap(),
-            direction: Destination::FromReg,
-            operation: Operation::Byte,
-            mode: get_mode(&input[1]).unwrap(),
-            reg: get_reg(&input[1])
-        }
+    pub fn read_instruction_stream(input: &Vec<u8>) -> ParsedInput {
+        ParsedInput {
+            opcode: &input[0] >> 2,
+            d: (&input[0] << 6) >> 7,
+            w: (&input[0] << 7) >> 7,
+            mode: &input[1] >> 6,
+            reg: (&input[1] << 2) >> 5,
+            rm: (&input[1] << 5 ) >> 5
+         }
     }
 }
-
 
 pub enum Opcode {
     MOV,
@@ -55,17 +57,15 @@ impl std::fmt::Display for Opcode {
     }
 }
 
-pub fn get_opcode(byte: &u8) -> Option<Opcode> {
-    match byte >> 2 {
+pub fn interpret_opcode(opcode: &u8) -> Option<Opcode> {
+    match opcode {
         34 =>  Some(Opcode::MOV),
         _ => None
     }
 }
 
-
-
-pub fn get_mode(byte: &u8) -> Option<Mode> {
-    match byte >> 6 {
+pub fn interpret_mode(mode: &u8) -> Option<Mode> {
+    match mode {
         0 => Some(Mode::Memory(Displacement::No)),
         1 => Some(Mode::Memory(Displacement::EightBit)),
         2 => Some(Mode::Memory(Displacement::SixteenBit)),
@@ -74,7 +74,5 @@ pub fn get_mode(byte: &u8) -> Option<Mode> {
     }
 }
 
-pub fn get_reg(byte: &u8) -> u8 {
-    (byte << 2) >> 5
-}
+
 

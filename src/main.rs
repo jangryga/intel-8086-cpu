@@ -35,6 +35,10 @@ fn main() {
     println!("{:08b}", first_val);
     println!("{:08b}", second_val);
 
+    let intermediate =  Decoder::read_instruction_stream(&file_content);
+
+    println!("{:?}", intermediate);
+
 
     // for byte in file_content {
     //     print!("{:08b} ", byte);
@@ -50,6 +54,4 @@ fn main() {
     // }
 
     // println!("{}", get_instruction(first_val).map(|x| x.to_string()).unwrap_or(String::from("Opcode not recognized")))
-
-    
 }
