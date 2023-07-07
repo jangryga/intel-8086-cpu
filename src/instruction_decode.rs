@@ -24,8 +24,86 @@ impl Decoder {
          }
     }
 
-    pub fn decode_input(partial_representation: &ParsedInput) {}
+    pub fn decode_input(partial_representation: &ParsedInput) {
+
+        let (field1, field2) = Self::get_fields(
+            partial_representation.w, 
+            partial_representation.mode, 
+            partial_representation.rm,
+            partial_representation.reg
+        );
+
+        let out = DecodedStream {
+            opcode: interpret_opcode(&partial_representation.opcode).unwrap(),
+            field1: field1,
+            field2: field2
+        };
+
+        println!("{} {}, {}", out.opcode, out.field1, out.field2);
+    }
+
+    fn get_fields(w: u8, mode: u8, rm: u8, reg: u8) -> (FieldEncoding, FieldEncoding) {
+        if mode == 3 {
+            let mut field1: Option<FieldEncoding> = None;
+            let mut field2: Option<FieldEncoding> = None;
+            if w == 0 {
+                match reg {
+                    0 => field1 = Some(FieldEncoding::AL),
+                    1 => field1 = Some(FieldEncoding::CL),
+                    2 => field1 = Some(FieldEncoding::DL),
+                    3 => field1 = Some(FieldEncoding::BL),
+                    4 => field1 = Some(FieldEncoding::AH),
+                    5 => field1 = Some(FieldEncoding::CH),
+                    6 => field1 = Some(FieldEncoding::DH),
+                    7 => field1 = Some(FieldEncoding::BH),
+                    _ => (),
+                }
+
+                match rm {
+                    0 => field2 = Some(FieldEncoding::AL),
+                    1 => field2 = Some(FieldEncoding::CL),
+                    2 => field2 = Some(FieldEncoding::DL),
+                    3 => field2 = Some(FieldEncoding::BL),
+                    4 => field2 = Some(FieldEncoding::AH),
+                    5 => field2 = Some(FieldEncoding::CH),
+                    6 => field2 = Some(FieldEncoding::DH),
+                    7 => field2 = Some(FieldEncoding::BH),
+                    _ => (),
+                }
+            } else {
+                match reg {
+                    0 => field1 = Some(FieldEncoding::AX),
+                    1 => field1 = Some(FieldEncoding::CX),
+                    2 => field1 = Some(FieldEncoding::DX),
+                    3 => field1 = Some(FieldEncoding::BX),
+                    4 => field1 = Some(FieldEncoding::SP),
+                    5 => field1 = Some(FieldEncoding::BP),
+                    6 => field1 = Some(FieldEncoding::SI),
+                    7 => field1 = Some(FieldEncoding::DI),
+                    _ => (),
+                }
+                match rm {
+                    0 => field2 = Some(FieldEncoding::AX),
+                    1 => field2 = Some(FieldEncoding::CX),
+                    2 => field2 = Some(FieldEncoding::DX),
+                    3 => field2 = Some(FieldEncoding::BX),
+                    4 => field2 = Some(FieldEncoding::SP),
+                    5 => field2 = Some(FieldEncoding::BP),
+                    6 => field2 = Some(FieldEncoding::SI),
+                    7 => field2 = Some(FieldEncoding::DI),
+                    _ => (),
+                }
+            }
+
+            (field2.unwrap(), field1.unwrap())
+        } else {
+            todo!()
+        }
+        
+    }
 }
+
+
 
 #[derive(LowercaseDisplay)]
 pub enum FieldEncoding {
@@ -52,6 +130,7 @@ pub struct DecodedStream {
     field1: FieldEncoding,
     field2: FieldEncoding
 }
+
 
 #[derive(LowercaseDisplay)]
 pub enum Opcode {
