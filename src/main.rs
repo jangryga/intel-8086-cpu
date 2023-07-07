@@ -37,7 +37,9 @@ fn main() {
 
     let intermediate =  Decoder::read_instruction_stream(&file_content);
 
-    println!("{:?}", intermediate);
+    // println!("{:?}", intermediate);
+
+    println!("{}, {}, {}", FieldEncoding::AX, FieldEncoding::BX, FieldEncoding::CX);
 
 
     // for byte in file_content {

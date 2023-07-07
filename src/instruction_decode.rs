@@ -1,5 +1,7 @@
 pub struct Decoder;
 
+use lowercase_display_derive::{LowercaseDisplay};
+
 #[derive(Debug)]
 pub struct ParsedInput {
     pub opcode: u8,
@@ -21,8 +23,37 @@ impl Decoder {
             rm: (&input[1] << 5 ) >> 5
          }
     }
+
+    pub fn decode_input(partial_representation: &ParsedInput) {}
 }
 
+#[derive(LowercaseDisplay)]
+pub enum FieldEncoding {
+    AX,
+    AL,
+    AH,
+    BX,
+    BL,
+    BH,
+    CX,
+    CL,
+    CH,
+    DX,
+    DL,
+    DH,
+    DI,
+    SI,
+    SP,
+    BP
+}
+
+pub struct DecodedStream {
+    opcode: Opcode,
+    field1: FieldEncoding,
+    field2: FieldEncoding
+}
+
+#[derive(LowercaseDisplay)]
 pub enum Opcode {
     MOV,
 }
@@ -47,14 +78,6 @@ pub enum Displacement {
 pub enum Mode {
     Register,
     Memory(crate::instruction_decode::Displacement),
-}
-
-impl std::fmt::Display for Opcode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            Opcode::MOV => write!(f, "MOV")
-        }
-    }
 }
 
 pub fn interpret_opcode(opcode: &u8) -> Option<Opcode> {

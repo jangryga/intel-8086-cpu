@@ -3,13 +3,6 @@
 version = 3
 
 [[package]]
-name = "fake-cpu"
-version = "0.1.0"
-dependencies = [
- "lowercase_display_derive",
-]
-
-[[package]]
 name = "lowercase_display_derive"
 version = "0.1.0"
 dependencies = [
