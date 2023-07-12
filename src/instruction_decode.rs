@@ -1,6 +1,9 @@
 pub struct Decoder;
 
 use lowercase_display_derive::{LowercaseDisplay};
+use std::collections::VecDeque;
+use std::fs;
+use std::io::Result;
 
 #[derive(Debug)]
 pub struct ParsedInput {
@@ -10,6 +13,58 @@ pub struct ParsedInput {
     pub mode: u8,
     pub reg: u8,
     pub rm: u8
+}
+
+
+pub struct Parser {
+    pub memory: VecDeque<u8>
+}
+
+impl Parser {
+    pub fn load(&mut self, file_name: &str) -> Result<()> {
+        let mut file_content = fs::read(file_name).expect("this should work");
+        file_content.reverse();
+
+        self.memory.extend(file_content);
+        Ok(())
+    }
+
+    pub fn decode(&mut self) {
+
+        while let Some(byte) = self.memory.pop_front() {
+            // Get instruction Opcode
+            let (opcode,  kind) = Self::match_opcode(&byte);
+            match kind {
+                Some(InstructionKind::FourBitOpcode) => println!("FourBitOpcode"),
+                Some(InstructionKind::SixBitOpcode) => println!("FourBitOpcode"),
+                None => panic!("Unrecognized instruction")
+            }
+        }
+    }
+
+    fn match_opcode(byte: &u8) -> (Option<Opcode>, Option<InstructionKind>) {
+        match byte >> 2 {
+            34 => (Some(Opcode::MOV), Some(InstructionKind::SixBitOpcode)),
+            _ =>  match byte >> 4 {
+                11 => (Some(Opcode::MOV), Some(InstructionKind::FourBitOpcode)),
+                _ => (None, None)
+            }
+        }
+    }
+
+ }
+
+ enum InstructionKind {
+    FourBitOpcode,
+    SixBitOpcode
+ }
+
+enum FourBitOpcodes {
+    MOV
+}
+
+pub struct InstructionQueue {
+    pub memory: Vec<u8>
 }
 
 impl Decoder {
@@ -43,6 +98,7 @@ impl Decoder {
     }
 
     fn get_fields(w: u8, mode: u8, rm: u8, reg: u8) -> (FieldEncoding, FieldEncoding) {
+        // no displacement
         if mode == 3 {
             let mut field1: Option<FieldEncoding> = None;
             let mut field2: Option<FieldEncoding> = None;
@@ -97,7 +153,10 @@ impl Decoder {
 
             (field2.unwrap(), field1.unwrap())
         } else {
-            todo!()
+            // 00 - no displacement - unless rm is set 110 - direct address with 16 bit displacement
+            // 01 - 8 bit displacement
+            // 10 - 16 bit displacement
+            unimplemented!()
         }
         
     }
