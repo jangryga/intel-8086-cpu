@@ -20,6 +20,21 @@ pub struct Parser {
     pub memory: VecDeque<u8>
 }
 
+enum Data {
+    U8(u8),
+    U16(u16)
+}
+
+impl std::fmt::Display for Data {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Data::U16(x) => write!(f, "{}", x),
+            Data::U8(x) => write!(f, "{}", x)
+        }
+    }
+}
+
+
 impl Parser {
     pub fn load(&mut self, file_name: &str) -> Result<()> {
         let mut file_content = fs::read(file_name).expect("this should work");
@@ -32,13 +47,30 @@ impl Parser {
     pub fn decode(&mut self) {
 
         while let Some(byte) = self.memory.pop_front() {
+            let mut w: Option<u8> = None;
             // Get instruction Opcode
             let (opcode,  kind) = Self::match_opcode(&byte);
-            match kind {
-                Some(InstructionKind::FourBitOpcode) => println!("FourBitOpcode"),
-                Some(InstructionKind::SixBitOpcode) => println!("FourBitOpcode"),
-                None => panic!("Unrecognized instruction")
+            if let Some(InstructionKind::FourBitOpcode) = kind {
+                w = Some((&byte << 4) >> 7);
+                let reg_numeric_value = (&byte << 5) >> 5;
+                let reg: FieldEncoding = get_reg_field_encoding(&reg_numeric_value, &w.unwrap());
+                let data: Option<Data> = match w {
+                    Some(1) => {
+                        let low = self.memory.pop_front().unwrap() as u16;
+                        let high = self.memory.pop_front().unwrap() as u16;
+                        Some(Data::U16((high << 8) | low))
+                    },
+                    Some(0) => Some(Data::U8(self.memory.pop_front().unwrap())),
+                    _ => None
+                };
+                
+                println!("{} {}, {}", opcode.unwrap(), reg, data.unwrap());
             }
+            else if let Some(InstructionKind::SixBitOpcode) = kind {}
+            else {
+                panic!("Unrecognized instruction")
+            }
+
         }
     }
 
@@ -54,17 +86,9 @@ impl Parser {
 
  }
 
- enum InstructionKind {
+enum InstructionKind {
     FourBitOpcode,
     SixBitOpcode
- }
-
-enum FourBitOpcodes {
-    MOV
-}
-
-pub struct InstructionQueue {
-    pub memory: Vec<u8>
 }
 
 impl Decoder {
@@ -162,7 +186,35 @@ impl Decoder {
     }
 }
 
-
+fn get_reg_field_encoding(reg: &u8, w: &u8) -> FieldEncoding {
+    let mut field: Option<FieldEncoding> = None;
+    match w {
+        0 => field = match reg {
+            0 => Some(FieldEncoding::AL),
+            1 => Some(FieldEncoding::CL),
+            2 => Some(FieldEncoding::DL),
+            3 => Some(FieldEncoding::BL),
+            4 => Some(FieldEncoding::AH),
+            5 => Some(FieldEncoding::CH),
+            6 => Some(FieldEncoding::DH),
+            7 => Some(FieldEncoding::BH),
+            _ => None,
+        },
+        1 => field = match reg {
+            0 => Some(FieldEncoding::AX),
+            1 => Some(FieldEncoding::CX),
+            2 => Some(FieldEncoding::DX),
+            3 => Some(FieldEncoding::BX),
+            4 => Some(FieldEncoding::SP),
+            5 => Some(FieldEncoding::BP),
+            6 => Some(FieldEncoding::SI),
+            7 => Some(FieldEncoding::DI),
+            _ => None,
+        },
+        _ => panic!()
+    }
+    field.unwrap()
+}
 
 #[derive(LowercaseDisplay)]
 pub enum FieldEncoding {

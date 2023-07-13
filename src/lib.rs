@@ -2,7 +2,7 @@ pub mod instruction_decode;
 
 #[cfg(test)]
 mod tests {
-    use crate::instruction_decode::{Decoder, interpret_mode, Mode, Displacement};
+    use crate::instruction_decode::{Decoder, interpret_mode, Mode, Displacement, Parser};
 
     fn fake_stream(x: u8, y: u8) -> Vec<u8> {
         vec![x, y]
@@ -20,4 +20,15 @@ mod tests {
         assert_eq!(interpret_mode(&in3.mode), Some(Mode::Memory(Displacement::EightBit)));
         assert_eq!(interpret_mode(&in4.mode), Some(Mode::Memory(Displacement::No)));
     }
+
+    // #[test]
+    // fn immediate_to_register() {
+    //     let instructions: Vec<u8> = vec![184, 12, 240];
+
+    //     let mut p = Parser {
+    //         memory: instructions.into()
+    //     };
+
+    //     p.decode()
+    // }
 }
