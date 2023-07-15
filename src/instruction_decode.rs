@@ -69,7 +69,6 @@ impl Decoder {
                 println!("{} {}, {}", opcode.unwrap(), reg, data.unwrap());
             }
             else if let Some(InstructionKind::SixBitOpcode) = kind {
-                println!("SixBitOpcode {} for: {:08b}", opcode.as_ref().unwrap(), byte);
                 // d = Some((&byte << 6 ) >> 7); // TODO: not used for now
                 w = Some((&byte << 7) >> 7);
                 // finished with the first byte, I now know opcode, d, w
@@ -103,15 +102,40 @@ impl Decoder {
                     1 => {
                         let field1 = FieldEncoding::Reg(get_register(&reg, &w.unwrap()));
                         let mut field2: Option<FieldEncoding> = None;
-                        let _third_byte = self.memory.pop_front().unwrap();
+                        let third_byte = self.memory.pop_front().unwrap();
                         match rm {
+                            0 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::SI), third_byte as u16)),
+                            1 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::DI), third_byte as u16)),
+                            2 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::SI), third_byte as u16)),
+                            3 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::DI), third_byte as u16)),
+                            4 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::SI, None, third_byte as u16)),
+                            5 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::DI, None, third_byte as u16)),
                             6 => field2 = Some(FieldEncoding::Indexed(Register::BP, None)),
+                            7 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, None, third_byte as u16)),
                             _ => todo!()
                         }
                         println!("{} {}, {}", opcode.unwrap(), field1, field2.unwrap());
 
                     },
-                    2 => {},
+                    2 => {
+                        let field1 = FieldEncoding::Reg(get_register(&reg, &w.unwrap()));
+                        let mut field2: Option<FieldEncoding> = None;
+                        let third_byte = self.memory.pop_front().unwrap();
+                        let fourth_bute = self.memory.pop_front().unwrap();
+                        let displacement = u16::from_le_bytes([third_byte, fourth_bute]);
+                        match rm {
+                            0 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::SI), displacement)),
+                            1 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::DI), displacement)),
+                            2 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::SI), displacement)),
+                            3 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::DI), displacement)),
+                            4 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::SI, None, displacement)),
+                            5 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::DI, None, displacement)),
+                            6 => field2 = Some(FieldEncoding::Indexed(Register::BP, None)),
+                            7 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, None, displacement)),
+                            _ => todo!()
+                        }
+                        println!("{} {}, {}", opcode.unwrap(), field1, field2.unwrap());
+                    },
                     3 => {
                         let field1 = FieldEncoding::Reg(get_register(&rm, &w.unwrap()));
                         let field2 = FieldEncoding::Reg(get_register(&reg, &w.unwrap()));
@@ -230,7 +254,7 @@ pub enum Register {
 pub enum FieldEncoding {
     Reg(Register),
     Indexed(Register, Option<Register>), // First register is base, second is index
-    IndexedDisplaced(Register, Register, i32)
+    IndexedDisplaced(Register, Option<Register>, u16)
 }
 
 impl std::fmt::Display for FieldEncoding {
@@ -241,7 +265,10 @@ impl std::fmt::Display for FieldEncoding {
                 Some(reg2) => write!(f, "[{} + {}]", reg1, reg2),
                 None => write!(f, "[{}]", reg1)
             } ,
-            FieldEncoding::IndexedDisplaced(reg1, reg2, disp) => write!(f, "[{}] + [{}] + {}", reg1, reg2, disp)
+            FieldEncoding::IndexedDisplaced(reg1, reg2, disp) => match reg2 {
+                Some(reg2) =>  write!(f, "[{} + {} + {}]", reg1, reg2, disp),
+                None => write!(f, "[{} + {}]", reg1, disp)
+            }
         }
     }
 }
