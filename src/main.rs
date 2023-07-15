@@ -10,7 +10,6 @@ fn main() {
     let mut file_content = fs::read(file_name).expect("this should work");
     file_content.reverse();
 
-    // 
     // let fake_instruction_stream: Vec<u8> = vec![184, 12, 240, 136, 229];
 
     // let mut p = Parser {
@@ -21,5 +20,5 @@ fn main() {
     let _ = p.load(&file_name);
     p.dump_memory();
     p.decode();
-    
+    p.execute();
 }
