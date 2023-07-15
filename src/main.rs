@@ -11,7 +11,7 @@ fn main() {
     file_content.reverse();
 
     // 
-    let fake_instruction_stream: Vec<u8> = vec![184, 12, 240, 136, 229];
+    // let fake_instruction_stream: Vec<u8> = vec![184, 12, 240, 136, 229];
 
     // let mut p = Parser {
     //     memory: fake_instruction_stream.into()

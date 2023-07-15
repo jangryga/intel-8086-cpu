@@ -16,4 +16,6 @@
 
 bits 16
 
-mov ch, ch
+mov al, [bx + si]
+mov bx, [bp + di]
+mov dx, [bp]

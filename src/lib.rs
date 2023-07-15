@@ -1,3 +1,5 @@
+#[allow(unused_assignments)]
+
 pub mod instruction_decode;
 
 #[cfg(test)]
