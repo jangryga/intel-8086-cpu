@@ -35,12 +35,13 @@ impl Decoder {
         while let Some(byte) = self.memory.pop_front() {
             let mut w: Option<u8> = None;
             let mut d: Option<u8> = None;
+            let mut s: Option<u8> = None;
             // Get instruction Opcode
-            let (opcode,  kind) = Self::match_opcode(&byte);
+            let (mut opcode,  kind) = Self::match_opcode(&byte);
             if let Some(InstructionKind::FourBitOpcode) = kind {
                 w = Some((&byte << 4) >> 7);
                 let reg_numeric_value = (&byte << 5) >> 5;
-                let reg: Register = Decoder::get_register(&reg_numeric_value, &w.unwrap());
+                let reg_field = Decoder::get_reg_field(&reg_numeric_value, &w.unwrap());
                 let data: Option<RawData> = match w {
                     Some(1) => {
                         let low = self.memory.pop_front().unwrap() as u16;
@@ -50,85 +51,69 @@ impl Decoder {
                     Some(0) => Some(RawData::U8(self.memory.pop_front().unwrap())),
                     _ => None
                 };
-                self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::RawData(data.unwrap()), FieldOrRawData::FieldEncoding(FieldEncoding::Reg(reg)));
+                self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::RawData(data.unwrap()), FieldOrRawData::FieldEncoding(reg_field));
             }
             else if let Some(InstructionKind::SixBitOpcode) = kind {
                 d = Some((&byte << 6 ) >> 7); 
                 w = Some((&byte << 7) >> 7);
                 // finished with the first byte, I now know opcode, d, w
                 // load second byte
-                // now get the mod 
+                // now get the mod
                 let second_byte: u8 = self.memory.pop_front().unwrap();
                 let mode: u8 = second_byte >> 6;
                 let reg = (second_byte << 2) >> 5;
                 let rm = (second_byte << 5) >> 5;
+                // WILDCARD handling immediate to register / memory - if memory, there could be a displacement
+                // if first byte is 100000SW, opcode is encoded by reg field
+                if let Some(Opcode::WILDCARD) = opcode {
+                    opcode = Decoder::match_wildcard_opcode(&reg);
+                    s = Some((&byte << 6 ) >> 7);
+                    d = None;
+                }
                 // 00 - memory mode, no displacement (unless rm = 110 - direct address)
                 // 01 - memory mode, 8 bit 
                 // 10 - memory mode, 16 bit
                 // 11 - register mode
                 match mode {
                     0 => {
-                        let field1 = FieldEncoding::Reg(Decoder::get_register(&reg, &w.unwrap()));
-                        let mut field2: Option<FieldEncoding> = None;
-                        match rm {
-                            0 => field2 = Some(FieldEncoding::Indexed(Register::BX, Some(Register::SI))),
-                            1 => field2 = Some(FieldEncoding::Indexed(Register::BX, Some(Register::DI))),
-                            2 => field2 = Some(FieldEncoding::Indexed(Register::BP, Some(Register::SI))),
-                            3 => field2 = Some(FieldEncoding::Indexed(Register::BP, Some(Register::DI))),
-                            4 => field2 = Some(FieldEncoding::Indexed(Register::SI, None)),
-                            5 => field2 = Some(FieldEncoding::Indexed(Register::DI, None)),
-                            6 => field2 = Some(FieldEncoding::Indexed(Register::BP, None)), // direct address
-                            7 => field2 = Some(FieldEncoding::Indexed(Register::BX, None)),
-                            _ => unimplemented!()
-                        };
-                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field1), FieldOrRawData::FieldEncoding(field2.unwrap()));
+                        let field1 = Decoder::get_reg_field(&reg, &w.unwrap());
+                        let field2 = Decoder::get_rm_field(&rm, None);
+                        
+                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field1), FieldOrRawData::FieldEncoding(field2));
                     },
                     1 => {
-                        let field1 = FieldEncoding::Reg(Decoder::get_register(&reg, &w.unwrap()));
-                        let mut field2: Option<FieldEncoding> = None;
-                        let third_byte = self.memory.pop_front().unwrap() as i8;
-                        match rm {
-                            0 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::SI), third_byte as i16)),
-                            1 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::DI), third_byte as i16)),
-                            2 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::SI), third_byte as i16)),
-                            3 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::DI), third_byte as i16)),
-                            4 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::SI, None, third_byte as i16)),
-                            5 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::DI, None, third_byte as i16)),
-                            6 => field2 = Some(FieldEncoding::Indexed(Register::BP, None)),
-                            7 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, None, third_byte as i16)),
-                            _ => todo!()
-                        }
-                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field1), FieldOrRawData::FieldEncoding(field2.unwrap()));
+                        let third_byte = self.memory.pop_front().unwrap() as i16;
+
+                        let field1 = Decoder::get_reg_field(&reg, &w.unwrap());
+                        let field2 = Decoder::get_rm_field(&rm, Some(third_byte));
+                        
+                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field1), FieldOrRawData::FieldEncoding(field2));
                     },
                     2 => {
-                        let field1 = FieldEncoding::Reg(Decoder::get_register(&reg, &w.unwrap()));
-                        let mut field2: Option<FieldEncoding> = None;
                         let third_byte = self.memory.pop_front().unwrap();
-                        let fourth_bute = self.memory.pop_front().unwrap();
-                        let displacement = i16::from_le_bytes([third_byte, fourth_bute]);
-                        match rm {
-                            0 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::SI), displacement)),
-                            1 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, Some(Register::DI), displacement)),
-                            2 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::SI), displacement)),
-                            3 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BP, Some(Register::DI), displacement)),
-                            4 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::SI, None, displacement)),
-                            5 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::DI, None, displacement)),
-                            6 => field2 = Some(FieldEncoding::Indexed(Register::BP, None)),
-                            7 => field2 = Some(FieldEncoding::IndexedDisplaced(Register::BX, None, displacement)),
-                            _ => todo!()
-                        }
-                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field1), FieldOrRawData::FieldEncoding(field2.unwrap()));
+                        let fourth_byte = self.memory.pop_front().unwrap();
+                        let displacement = i16::from_le_bytes([third_byte, fourth_byte]);
+
+                        let field1 = Decoder::get_reg_field(&reg, &w.unwrap());
+                        let field2 = Decoder::get_rm_field(&rm, Some(displacement));
+                       
+                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field1), FieldOrRawData::FieldEncoding(field2));
                     },
                     3 => {
-                        let field1 = FieldEncoding::Reg(Decoder::get_register(&rm, &w.unwrap()));
-                        let field2 = FieldEncoding::Reg(Decoder::get_register(&reg, &w.unwrap()));
-                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field2), FieldOrRawData::FieldEncoding(field1));
+                        if let None = d {
+                            
+                        }
+                        let field1 = Decoder::get_reg_field(&reg, &w.unwrap());;
+                        let field2 = Decoder::get_reg_field(&rm, &w.unwrap());
+                        self.append_intermidiate_repr(d.as_ref(), opcode.unwrap(), FieldOrRawData::FieldEncoding(field1), FieldOrRawData::FieldEncoding(field2));
                     }
                     _ => ()
                 }
             }
             else {
                 println!("{:08b}", byte);
+                println!("Memory dump before panic");
+                self.execute();
                 panic!("Unrecognized instruction")
             }
 
@@ -145,11 +130,24 @@ impl Decoder {
         match d {
             Some(1) => self.intermediate_repr.push(DecodedMemField { opcode: opcode, field_one: field1, field_two: field2 }),
             _ => self.intermediate_repr.push(DecodedMemField { opcode: opcode, field_one: field2, field_two: field1 }),
+            // _ => panic!("D not specified")
+        }
+    }
+
+    fn match_wildcard_opcode(reg: &u8) -> Option<Opcode> {
+        match reg {
+            0 => Some(Opcode::ADD),
+            2 => Some(Opcode::ADC),
+            5 => Some(Opcode::SUB),
+            7 => Some(Opcode::SUB),
+            _ => None
         }
     }
 
     fn match_opcode(byte: &u8) -> (Option<Opcode>, Option<InstructionKind>) {
         match byte >> 2 {
+            0 => (Some(Opcode::ADD), Some(InstructionKind::SixBitOpcode)),
+            32 => (Some(Opcode::WILDCARD), Some(InstructionKind::SixBitOpcode)),
             34 => (Some(Opcode::MOV), Some(InstructionKind::SixBitOpcode)),
             _ =>  match byte >> 4 {
                 11 => (Some(Opcode::MOV), Some(InstructionKind::FourBitOpcode)),
@@ -158,34 +156,51 @@ impl Decoder {
         }
     }
 
-    fn get_register(reg: &u8, w: &u8) -> Register {
-        let mut field: Option<Register> = None;
+    fn get_rm_field(rm: &u8, disp: Option<i16>) -> FieldEncoding {
+        let mut rm_field: Option<FieldEncoding> = None;
+        rm_field = match rm {
+            0 => Some(FieldEncoding::Indexed(Register::BX, Some(Register::SI), disp)),
+            1 => Some(FieldEncoding::Indexed(Register::BX, Some(Register::DI), disp)),
+            2 => Some(FieldEncoding::Indexed(Register::BP, Some(Register::SI), disp)),
+            3 => Some(FieldEncoding::Indexed(Register::BP, Some(Register::DI), disp)),
+            4 => Some(FieldEncoding::Indexed(Register::SI, None, disp)),
+            5 => Some(FieldEncoding::Indexed(Register::DI, None, disp)),
+            6 => Some(FieldEncoding::Indexed(Register::BP, None, disp)), // direct address
+            7 => Some(FieldEncoding::Indexed(Register::BX, None, disp)),
+            _ => panic!("R/M out of range")
+        };
+
+        rm_field.unwrap()
+    }
+
+    fn get_reg_field(reg: &u8, w: &u8) -> FieldEncoding {
+        let mut reg_field: Option<FieldEncoding> = None;
         match w {
-            0 => field = match reg {
-                0 => Some(Register::AL),
-                1 => Some(Register::CL),
-                2 => Some(Register::DL),
-                3 => Some(Register::BL),
-                4 => Some(Register::AH),
-                5 => Some(Register::CH),
-                6 => Some(Register::DH),
-                7 => Some(Register::BH),
+            0 => reg_field = match reg {
+                0 => Some(FieldEncoding::Reg(Register::AL)),
+                1 => Some(FieldEncoding::Reg(Register::CL)),
+                2 => Some(FieldEncoding::Reg(Register::DL)),
+                3 => Some(FieldEncoding::Reg(Register::BL)),
+                4 => Some(FieldEncoding::Reg(Register::AH)),
+                5 => Some(FieldEncoding::Reg(Register::CH)),
+                6 => Some(FieldEncoding::Reg(Register::DH)),
+                7 => Some(FieldEncoding::Reg(Register::BH)),
                 _ => None,
             },
-            1 => field = match reg {
-                0 => Some(Register::AX),
-                1 => Some(Register::CX),
-                2 => Some(Register::DX),
-                3 => Some(Register::BX),
-                4 => Some(Register::SP),
-                5 => Some(Register::BP),
-                6 => Some(Register::SI),
-                7 => Some(Register::DI),
+            1 => reg_field = match reg {
+                0 => Some(FieldEncoding::Reg(Register::AX)),
+                1 => Some(FieldEncoding::Reg(Register::CX)),
+                2 => Some(FieldEncoding::Reg(Register::DX)),
+                3 => Some(FieldEncoding::Reg(Register::BX)),
+                4 => Some(FieldEncoding::Reg(Register::SP)),
+                5 => Some(FieldEncoding::Reg(Register::BP)),
+                6 => Some(FieldEncoding::Reg(Register::SI)),
+                7 => Some(FieldEncoding::Reg(Register::DI)),
                 _ => None,
             },
             _ => ()
         }
-        field.unwrap()
+        reg_field.unwrap()
     }
  }
 
@@ -212,28 +227,6 @@ pub enum Register {
     SI,
     SP,
     BP
-}
-
-impl std::fmt::Display for FieldEncoding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            FieldEncoding::Reg(reg) => write!(f, "{}", reg),
-            FieldEncoding::Indexed(reg1, reg2) => match reg2 {
-                Some(reg2) => write!(f, "[{} + {}]", reg1, reg2),
-                None => write!(f, "[{}]", reg1)
-            },
-            FieldEncoding::IndexedDisplaced(reg1, reg2, disp) => match reg2 {
-                Some(reg2) => match disp {
-                    disp if disp > &0 =>  write!(f, "[{} + {} + {}]", reg1, reg2, disp),
-                    _ => write!(f, "[{} + {} - {}]", reg1, reg2, disp.abs())
-                },
-                None => match disp {
-                    disp if disp > &0 =>  write!(f, "[{} + {}]", reg1, disp),
-                    _ => write!(f, "[{} - {}]", reg1, disp.abs())
-                }
-            }
-        }
-    }
 }
 
 pub struct DecodedMemField {
@@ -264,8 +257,32 @@ impl std::fmt::Display for FieldOrRawData {
 
 pub enum FieldEncoding {
     Reg(Register),
-    Indexed(Register, Option<Register>), 
-    IndexedDisplaced(Register, Option<Register>, i16)
+    Indexed(Register, Option<Register>, Option<i16>),
+}
+
+impl std::fmt::Display for FieldEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            FieldEncoding::Reg(reg) => write!(f, "{}", reg),
+            FieldEncoding::Indexed(reg1, reg2, disp) => match disp {
+                Some(disp) => match reg2 {
+                    Some(reg2) => match disp {
+                        disp if disp > &0 =>  write!(f, "[{} + {} + {}]", reg1, reg2, disp),
+                        _ => write!(f, "[{} + {} - {}]", reg1, reg2, disp.abs())
+                    },
+                    None => match disp {
+                        disp if disp > &0 =>  write!(f, "[{} + {}]", reg1, disp),
+                        disp if disp == &0 => write!(f, "[{}]", reg1),
+                        _ => write!(f, "[{} - {}]", reg1, disp.abs())
+                    }
+                },
+                None => match reg2 {
+                    Some(reg2) => write!(f, "[{} + {}]", reg1, reg2),
+                    None => write!(f, "[{}]", reg1)
+                }
+            }
+        }
+    }
 }
 
 pub enum RawData {
@@ -284,5 +301,10 @@ impl std::fmt::Display for RawData {
 
 #[derive(LowercaseDisplay)]
 pub enum Opcode {
+    ADD,
+    ADC,
+    CMP,
+    SUB,
     MOV,
+    WILDCARD
 }
