@@ -38,7 +38,35 @@ impl Decoder {
             let mut s: Option<u8> = None;
             // Get instruction Opcode
             let (mut opcode, kind) = Self::match_opcode(&byte);
-            if let Some(InstructionKind::FourBitOpcode) = kind {
+
+            if let Some(InstructionKind::ImmediateToAccumulator) = kind {
+                w = Some((&byte << 7) >> 7);
+                let third_byte = self.memory.pop_front().unwrap();
+
+                if w == Some(1) {
+                    let fourth_byte = self.memory.pop_front().unwrap();
+                    self.intermediate_repr.push(DecodedMemField {
+                        opcode: opcode.unwrap(),
+                        field_one: FieldOrRawData::FieldEncoding(
+                            FieldEncoding::Reg(Register::AX),
+                            None,
+                        ),
+                        field_two: FieldOrRawData::RawData(
+                            RawData::U16(u16::from_le_bytes([third_byte, fourth_byte])),
+                            None,
+                        ),
+                    })
+                } else {
+                    self.intermediate_repr.push(DecodedMemField {
+                        opcode: opcode.unwrap(),
+                        field_one: FieldOrRawData::FieldEncoding(
+                            FieldEncoding::Reg(Register::AX),
+                            None,
+                        ),
+                        field_two: FieldOrRawData::RawData(RawData::U8(third_byte), None),
+                    })
+                }
+            } else if let Some(InstructionKind::FourBitOpcode) = kind {
                 w = Some((&byte << 4) >> 7);
                 let reg_numeric_value = (&byte << 5) >> 5;
                 let reg_field = Decoder::get_reg_field(&reg_numeric_value, &w.unwrap());
@@ -95,16 +123,14 @@ impl Decoder {
                                 ))
                             } else {
                                 explicit_size = Some(ExplicitSize::Byte);
-                                field1 = Some(FieldOrRawData::RawData(
-                                    RawData::U8(third_byte),
-                                    None,
-                                ));
+                                field1 =
+                                    Some(FieldOrRawData::RawData(RawData::U8(third_byte), None));
                             }
                         } else {
-                            field1 = Some(FieldOrRawData::FieldEncoding(Decoder::get_reg_field(
-                                &reg,
-                                &w.unwrap(),
-                            ), None));
+                            field1 = Some(FieldOrRawData::FieldEncoding(
+                                Decoder::get_reg_field(&reg, &w.unwrap()),
+                                None,
+                            ));
                         }
 
                         self.append_intermediate_repr(
@@ -123,7 +149,7 @@ impl Decoder {
                         self.append_intermediate_repr(
                             d.as_ref(),
                             opcode.unwrap(),
-                            FieldOrRawData::FieldEncoding(field1, None), //Todo handle immediate to reg 
+                            FieldOrRawData::FieldEncoding(field1, None), //Todo handle immediate to reg
                             FieldOrRawData::FieldEncoding(field2, None),
                         );
                     }
@@ -147,16 +173,14 @@ impl Decoder {
                                 ))
                             } else {
                                 explicit_size = Some(ExplicitSize::Byte);
-                                field1 = Some(FieldOrRawData::RawData(
-                                    RawData::U8(fifth_byte),
-                                    None,
-                                ));
+                                field1 =
+                                    Some(FieldOrRawData::RawData(RawData::U8(fifth_byte), None));
                             }
                         } else {
-                            field1 = Some(FieldOrRawData::FieldEncoding(Decoder::get_reg_field(
-                                &reg,
-                                &w.unwrap(),
-                            ), None));
+                            field1 = Some(FieldOrRawData::FieldEncoding(
+                                Decoder::get_reg_field(&reg, &w.unwrap()),
+                                None,
+                            ));
                         }
 
                         self.append_intermediate_repr(
@@ -169,8 +193,10 @@ impl Decoder {
                     3 => {
                         // TODO: 1. can field 1 reversed? 2. What about other modes?
                         let mut field1: Option<FieldOrRawData> = None;
-                        let field2 =
-                            FieldOrRawData::FieldEncoding(Decoder::get_reg_field(&rm, &w.unwrap()), None);
+                        let field2 = FieldOrRawData::FieldEncoding(
+                            Decoder::get_reg_field(&rm, &w.unwrap()),
+                            None,
+                        );
                         if let None = d {
                             let third_byte = self.memory.pop_front().unwrap();
                             if w == Some(1) && s == Some(0) {
@@ -185,10 +211,10 @@ impl Decoder {
                                     Some(FieldOrRawData::RawData(RawData::U8(third_byte), None));
                             }
                         } else {
-                            field1 = Some(FieldOrRawData::FieldEncoding(Decoder::get_reg_field(
-                                &reg,
-                                &w.unwrap(),
-                            ), None));
+                            field1 = Some(FieldOrRawData::FieldEncoding(
+                                Decoder::get_reg_field(&reg, &w.unwrap()),
+                                None,
+                            ));
                         }
                         self.append_intermediate_repr(
                             d.as_ref(),
@@ -241,19 +267,32 @@ impl Decoder {
             0 => Some(Opcode::ADD),
             2 => Some(Opcode::ADC),
             5 => Some(Opcode::SUB),
-            7 => Some(Opcode::SUB),
             _ => None,
         }
     }
 
     fn match_opcode(byte: &u8) -> (Option<Opcode>, Option<InstructionKind>) {
-        match byte >> 2 {
-            0 => (Some(Opcode::ADD), Some(InstructionKind::SixBitOpcode)),
-            32 => (Some(Opcode::WILDCARD), Some(InstructionKind::SixBitOpcode)), // TODO: might need to remove this
-            34 => (Some(Opcode::MOV), Some(InstructionKind::SixBitOpcode)),
-            _ => match byte >> 4 {
-                11 => (Some(Opcode::MOV), Some(InstructionKind::FourBitOpcode)),
-                _ => (None, None),
+        match byte >> 1 {
+            2 => (
+                Some(Opcode::ADD),
+                Some(InstructionKind::ImmediateToAccumulator),
+            ),
+            10 => (
+                Some(Opcode::ADC),
+                Some(InstructionKind::ImmediateToAccumulator),
+            ),
+            22 => (
+                Some(Opcode::SUB),
+                Some(InstructionKind::ImmediateToAccumulator),
+            ),
+            _ => match byte >> 2 {
+                0 => (Some(Opcode::ADD), Some(InstructionKind::SixBitOpcode)),
+                32 => (Some(Opcode::WILDCARD), Some(InstructionKind::SixBitOpcode)),
+                34 => (Some(Opcode::MOV), Some(InstructionKind::SixBitOpcode)),
+                _ => match byte >> 4 {
+                    11 => (Some(Opcode::MOV), Some(InstructionKind::FourBitOpcode)),
+                    _ => (None, None),
+                },
             },
         }
     }
@@ -287,8 +326,8 @@ impl Decoder {
                 5 => Some(FieldEncoding::Reg(Register::DI)),
                 6 => Some(FieldEncoding::Reg(Register::BP)),
                 7 => Some(FieldEncoding::Reg(Register::BX)),
-                _ => panic!("R/M out of range")
-            }
+                _ => panic!("R/M out of range"),
+            },
             _ => match rm {
                 0 => Some(FieldEncoding::Indexed(
                     Register::BX,
@@ -314,7 +353,7 @@ impl Decoder {
                 5 => Some(FieldEncoding::Indexed(Register::DI, None, disp)),
                 6 => Some(FieldEncoding::Indexed(Register::BP, None, disp)),
                 7 => Some(FieldEncoding::Indexed(Register::BX, None, disp)),
-                _ => panic!("R/M out of range")
+                _ => panic!("R/M out of range"),
             },
         };
         rm_field.unwrap()
@@ -358,6 +397,7 @@ impl Decoder {
 enum InstructionKind {
     FourBitOpcode,
     SixBitOpcode,
+    ImmediateToAccumulator,
 }
 
 #[derive(LowercaseDisplay, Debug, PartialEq)]
@@ -396,15 +436,15 @@ impl std::fmt::Display for DecodedMemField {
 impl PartialEq for DecodedMemField {
     fn eq(&self, other: &Self) -> bool {
         if self.opcode != other.opcode {
-            return false
+            return false;
         } else if self.field_one != other.field_one {
-            return false
+            return false;
         } else if self.field_two != other.field_two {
-            return false
+            return false;
         }
         true
     }
-} 
+}
 
 #[derive(Debug, PartialEq)]
 pub enum FieldOrRawData {
@@ -417,7 +457,7 @@ impl std::fmt::Display for FieldOrRawData {
         match self {
             FieldOrRawData::FieldEncoding(val, size) => match size {
                 Some(size) => write!(f, "{} {}", size, val),
-                None =>  write!(f, "{}", val)
+                None => write!(f, "{}", val),
             },
             FieldOrRawData::RawData(val, size) => match size {
                 Some(size) => write!(f, "{} {}", size, val),
@@ -455,24 +495,23 @@ impl std::fmt::Display for FieldEncoding {
             FieldEncoding::Indexed(reg1, reg2, disp) => match disp {
                 Some(disp) => match reg2 {
                     Some(reg2) => match disp {
-                        disp if disp > &0 =>  write!(f, "[{} + {} + {}]", reg1, reg2, disp),
-                        _ => write!(f, "[{} + {} - {}]", reg1, reg2, disp.abs())
+                        disp if disp > &0 => write!(f, "[{} + {} + {}]", reg1, reg2, disp),
+                        _ => write!(f, "[{} + {} - {}]", reg1, reg2, disp.abs()),
                     },
                     None => match disp {
-                        disp if disp > &0 =>  write!(f, "[{} + {}]", reg1, disp),
+                        disp if disp > &0 => write!(f, "[{} + {}]", reg1, disp),
                         disp if disp == &0 => write!(f, "[{}]", reg1),
-                        _ => write!(f, "[{} - {}]", reg1, disp.abs())
-                    }
+                        _ => write!(f, "[{} - {}]", reg1, disp.abs()),
+                    },
                 },
                 None => match reg2 {
                     Some(reg2) => write!(f, "[{} + {}]", reg1, reg2),
-                    None => write!(f, "[{}]", reg1)
-                }
-            }
+                    None => write!(f, "[{}]", reg1),
+                },
+            },
         }
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum RawData {
