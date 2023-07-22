@@ -56,19 +56,19 @@ mod tests {
 
     #[test]
     fn immediate_to_accumulator() {
-        // add ax, 1000
-        // 00000101 11101000 00000011
-        let fake_instruction_stream: Vec<u8> = vec![5, 232, 3];
-        let expected = DecodedMemField {
+        // test u16 and i8
+        // add ax, 1000               add al, -30
+        // 00000101 11101000 00000011 00000100 11100010
+        let fake_instruction_stream: Vec<u8> = vec![5, 232, 3, 4, 226];
+        let expected_u16 = DecodedMemField {
             opcode: Opcode::ADD,
-            field_one: FieldOrRawData::FieldEncoding(
-                FieldEncoding::Reg(Register::AX),
-                None,
-            ),
-            field_two: FieldOrRawData::RawData(
-                RawData::U16(1000),
-                None,
-            )
+            field_one: FieldOrRawData::FieldEncoding(FieldEncoding::Reg(Register::AX), None),
+            field_two: FieldOrRawData::RawData(RawData::U16(1000), None),
+        };
+        let expected_i8 = DecodedMemField {
+            opcode: Opcode::ADD,
+            field_one: FieldOrRawData::FieldEncoding(FieldEncoding::Reg(Register::AL), None),
+            field_two: FieldOrRawData::RawData(RawData::I8(-30), None),
         };
         let mut p = Decoder {
             intermediate_repr: VecDeque::new().into(),
@@ -77,6 +77,7 @@ mod tests {
 
         p.decode();
 
-        assert_eq!(expected, *p.intermediate_repr.get(0).unwrap());
+        assert_eq!(expected_u16, *p.intermediate_repr.get(0).unwrap());
+        assert_eq!(expected_i8, *p.intermediate_repr.get(1).unwrap());
     }
 }

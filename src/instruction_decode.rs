@@ -60,10 +60,10 @@ impl Decoder {
                     self.intermediate_repr.push(DecodedMemField {
                         opcode: opcode.unwrap(),
                         field_one: FieldOrRawData::FieldEncoding(
-                            FieldEncoding::Reg(Register::AX),
+                            FieldEncoding::Reg(Register::AL),
                             None,
                         ),
-                        field_two: FieldOrRawData::RawData(RawData::U8(third_byte), None),
+                        field_two: FieldOrRawData::RawData(RawData::I8(third_byte as i8), None),
                     })
                 }
             } else if let Some(InstructionKind::FourBitOpcode) = kind {
@@ -517,6 +517,7 @@ impl std::fmt::Display for FieldEncoding {
 pub enum RawData {
     U8(u8),
     U16(u16),
+    I8(i8),
 }
 
 impl std::fmt::Display for RawData {
@@ -524,6 +525,7 @@ impl std::fmt::Display for RawData {
         match self {
             RawData::U16(x) => write!(f, "{}", x),
             RawData::U8(x) => write!(f, "{}", x),
+            RawData::I8(x) => write!(f, "{}", x),
         }
     }
 }
