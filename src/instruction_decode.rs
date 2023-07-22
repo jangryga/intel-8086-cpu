@@ -128,18 +128,42 @@ impl Decoder {
                         );
                     }
                     2 => {
+                        let mut explicit_size: Option<ExplicitSize> = None;
                         let third_byte = self.memory.pop_front().unwrap();
                         let fourth_byte = self.memory.pop_front().unwrap();
                         let displacement = i16::from_le_bytes([third_byte, fourth_byte]);
 
-                        let field1 = Decoder::get_reg_field(&reg, &w.unwrap());
+                        let mut field1: Option<FieldOrRawData> = None;
                         let field2 = Decoder::get_rm_field(&rm, Some(displacement));
+
+                        if let None = d {
+                            let fifth_byte = self.memory.pop_front().unwrap();
+                            if w == Some(1) && s == Some(0) {
+                                explicit_size = Some(ExplicitSize::Word);
+                                let sixth_byte = self.memory.pop_front().unwrap();
+                                field1 = Some(FieldOrRawData::RawData(
+                                    RawData::U16(u16::from_le_bytes([fifth_byte, sixth_byte])),
+                                    None,
+                                ))
+                            } else {
+                                explicit_size = Some(ExplicitSize::Byte);
+                                field1 = Some(FieldOrRawData::RawData(
+                                    RawData::U8(fifth_byte),
+                                    None,
+                                ));
+                            }
+                        } else {
+                            field1 = Some(FieldOrRawData::FieldEncoding(Decoder::get_reg_field(
+                                &reg,
+                                &w.unwrap(),
+                            ), None));
+                        }
 
                         self.append_intermediate_repr(
                             d.as_ref(),
                             opcode.unwrap(),
-                            FieldOrRawData::FieldEncoding(field1, None),
-                            FieldOrRawData::FieldEncoding(field2, None),
+                            field1.unwrap(),
+                            FieldOrRawData::FieldEncoding(field2, explicit_size),
                         );
                     }
                     3 => {

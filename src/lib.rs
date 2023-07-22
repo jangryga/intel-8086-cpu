@@ -24,8 +24,29 @@ mod tests {
         };
 
         p.decode();
-        p.execute();
 
-        assert_eq!(*p.intermediate_repr.get(0).unwrap(), expected);
+        assert_eq!(expected, *p.intermediate_repr.get(0).unwrap());
     }
+
+    #[test]
+    fn immediate_to_memory_with_displacement() {
+        // add [bp + si + 1000], 29
+        // 10000011 10000010 11101000 00000011 00011101
+        let fake_instruction_stream: Vec<u8> = vec![131, 130, 232, 3, 29];
+        let expected = DecodedMemField {
+            opcode: Opcode::ADD,
+            field_one: FieldOrRawData::FieldEncoding(FieldEncoding::Indexed(Register::BP, Some(Register::SI), Some(1000)), Some(ExplicitSize::Byte)),
+            field_two: FieldOrRawData::RawData(RawData::U8(29), None)
+        };
+        let mut p = Decoder {
+            intermediate_repr: VecDeque::new().into(),
+            memory: fake_instruction_stream.into()
+        };
+
+        p.decode();
+
+        assert_eq!(expected, *p.intermediate_repr.get(0).unwrap());
+    }
+
+
 }
