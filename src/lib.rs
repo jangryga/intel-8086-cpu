@@ -23,7 +23,7 @@ mod tests {
 
         let mut p = Decoder {
             intermediate_repr: VecDeque::new().into(),
-            memory: fake_instruction_stream.into(),
+            instruction_queue: fake_instruction_stream.into(),
         };
 
         p.decode();
@@ -46,7 +46,7 @@ mod tests {
         };
         let mut p = Decoder {
             intermediate_repr: VecDeque::new().into(),
-            memory: fake_instruction_stream.into(),
+            instruction_queue: fake_instruction_stream.into(),
         };
 
         p.decode();
@@ -72,7 +72,7 @@ mod tests {
         };
         let mut p = Decoder {
             intermediate_repr: VecDeque::new().into(),
-            memory: fake_instruction_stream.into(),
+            instruction_queue: fake_instruction_stream.into(),
         };
 
         p.decode();
