@@ -4,14 +4,14 @@ use std::fs;
 use std::io::Result;
 
 pub struct Decoder {
-    pub memory: VecDeque<u8>,
+    pub instruction_queue: VecDeque<u8>,
     pub intermediate_repr: Vec<DecodedMemField>,
 }
 
 impl Decoder {
     pub fn new() -> Self {
         Decoder {
-            memory: VecDeque::new(),
+            instruction_queue: VecDeque::new(),
             intermediate_repr: Vec::new(),
         }
     }
@@ -20,19 +20,19 @@ impl Decoder {
         let file_content = fs::read(file_name).expect("this should work");
         // file_content.reverse();
 
-        self.memory.extend(file_content);
+        self.instruction_queue.extend(file_content);
         Ok(())
     }
 
     pub fn dump_memory(&self) {
-        for i in self.memory.iter() {
+        for i in self.instruction_queue.iter() {
             print!("{:08b} ", i);
         }
         println!("")
     }
 
     pub fn decode(&mut self) {
-        while let Some(byte) = self.memory.pop_front() {
+        while let Some(byte) = self.instruction_queue.pop_front() {
             let mut w: Option<u8> = None;
             let mut d: Option<u8> = None;
             let mut s: Option<u8> = None;
@@ -41,10 +41,10 @@ impl Decoder {
 
             if let Some(InstructionKind::ImmediateToAccumulator) = kind {
                 w = Some((&byte << 7) >> 7);
-                let third_byte = self.memory.pop_front().unwrap();
+                let third_byte = self.instruction_queue.pop_front().unwrap();
 
                 if w == Some(1) {
-                    let fourth_byte = self.memory.pop_front().unwrap();
+                    let fourth_byte = self.instruction_queue.pop_front().unwrap();
                     self.intermediate_repr.push(DecodedMemField {
                         opcode: opcode.unwrap(),
                         field_one: FieldOrRawData::FieldEncoding(
@@ -72,11 +72,11 @@ impl Decoder {
                 let reg_field = Decoder::get_reg_field(&reg_numeric_value, &w.unwrap());
                 let data: Option<RawData> = match w {
                     Some(1) => {
-                        let low = self.memory.pop_front().unwrap() as u16;
-                        let high = self.memory.pop_front().unwrap() as u16;
+                        let low = self.instruction_queue.pop_front().unwrap() as u16;
+                        let high = self.instruction_queue.pop_front().unwrap() as u16;
                         Some(RawData::U16((high << 8) | low))
                     }
-                    Some(0) => Some(RawData::U8(self.memory.pop_front().unwrap())),
+                    Some(0) => Some(RawData::U8(self.instruction_queue.pop_front().unwrap())),
                     _ => None,
                 };
                 self.append_intermediate_repr(
@@ -91,7 +91,7 @@ impl Decoder {
                 // finished with the first byte, I now know opcode, d, w
                 // load second byte
                 // now get the mod
-                let second_byte: u8 = self.memory.pop_front().unwrap();
+                let second_byte: u8 = self.instruction_queue.pop_front().unwrap();
                 let mode: u8 = second_byte >> 6;
                 let reg = (second_byte << 2) >> 5;
                 let rm = (second_byte << 5) >> 5;
@@ -112,11 +112,11 @@ impl Decoder {
                         let mut explicit_size: Option<ExplicitSize> = None;
                         let field2 = Decoder::get_rm_field(&rm, None);
                         if let None = d {
-                            let third_byte = self.memory.pop_front().unwrap();
+                            let third_byte = self.instruction_queue.pop_front().unwrap();
                             if w == Some(1) && s == Some(0) {
                                 // if s:w = 01 ??
                                 explicit_size = Some(ExplicitSize::Word);
-                                let fourth_byte = self.memory.pop_front().unwrap();
+                                let fourth_byte = self.instruction_queue.pop_front().unwrap();
                                 field1 = Some(FieldOrRawData::RawData(
                                     RawData::U16(u16::from_le_bytes([third_byte, fourth_byte])),
                                     None,
@@ -141,7 +141,7 @@ impl Decoder {
                         );
                     }
                     1 => {
-                        let third_byte = self.memory.pop_front().unwrap() as i16;
+                        let third_byte = self.instruction_queue.pop_front().unwrap() as i16;
 
                         let field1 = Decoder::get_reg_field(&reg, &w.unwrap());
                         let field2 = Decoder::get_rm_field(&rm, Some(third_byte));
@@ -155,18 +155,18 @@ impl Decoder {
                     }
                     2 => {
                         let mut explicit_size: Option<ExplicitSize> = None;
-                        let third_byte = self.memory.pop_front().unwrap();
-                        let fourth_byte = self.memory.pop_front().unwrap();
+                        let third_byte = self.instruction_queue.pop_front().unwrap();
+                        let fourth_byte = self.instruction_queue.pop_front().unwrap();
                         let displacement = i16::from_le_bytes([third_byte, fourth_byte]);
 
                         let mut field1: Option<FieldOrRawData> = None;
                         let field2 = Decoder::get_rm_field(&rm, Some(displacement));
 
                         if let None = d {
-                            let fifth_byte = self.memory.pop_front().unwrap();
+                            let fifth_byte = self.instruction_queue.pop_front().unwrap();
                             if w == Some(1) && s == Some(0) {
                                 explicit_size = Some(ExplicitSize::Word);
-                                let sixth_byte = self.memory.pop_front().unwrap();
+                                let sixth_byte = self.instruction_queue.pop_front().unwrap();
                                 field1 = Some(FieldOrRawData::RawData(
                                     RawData::U16(u16::from_le_bytes([fifth_byte, sixth_byte])),
                                     None,
@@ -191,17 +191,16 @@ impl Decoder {
                         );
                     }
                     3 => {
-                        // TODO: 1. can field 1 reversed? 2. What about other modes?
                         let mut field1: Option<FieldOrRawData> = None;
                         let field2 = FieldOrRawData::FieldEncoding(
                             Decoder::get_reg_field(&rm, &w.unwrap()),
                             None,
                         );
                         if let None = d {
-                            let third_byte = self.memory.pop_front().unwrap();
+                            let third_byte = self.instruction_queue.pop_front().unwrap();
                             if w == Some(1) && s == Some(0) {
                                 // if s:w = 01 ??
-                                let fourth_byte = self.memory.pop_front().unwrap();
+                                let fourth_byte = self.instruction_queue.pop_front().unwrap();
                                 field1 = Some(FieldOrRawData::RawData(
                                     RawData::U16(u16::from_le_bytes([third_byte, fourth_byte])),
                                     None,
