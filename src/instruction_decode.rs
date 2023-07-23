@@ -5,7 +5,7 @@ use std::io::Result;
 
 pub struct Decoder {
     pub instruction_queue: VecDeque<u8>,
-    pub intermediate_repr: Vec<DecodedMemField>,
+    pub intermediate_repr: Vec<Instruction>,
 }
 
 impl Decoder {
@@ -18,7 +18,6 @@ impl Decoder {
 
     pub fn load(&mut self, file_name: &str) -> Result<()> {
         let file_content = fs::read(file_name).expect("this should work");
-        // file_content.reverse();
 
         self.instruction_queue.extend(file_content);
         Ok(())
@@ -45,25 +44,23 @@ impl Decoder {
 
                 if w == Some(1) {
                     let fourth_byte = self.instruction_queue.pop_front().unwrap();
-                    self.intermediate_repr.push(DecodedMemField {
+                    self.intermediate_repr.push(Instruction {
                         opcode: opcode.unwrap(),
-                        field_one: FieldOrRawData::FieldEncoding(
-                            FieldEncoding::Reg(Register::AX),
-                            None,
-                        ),
-                        field_two: FieldOrRawData::RawData(
-                            RawData::U16(u16::from_le_bytes([third_byte, fourth_byte])),
-                            None,
-                        ),
+                        operands: [
+                            Operand::FieldEncoding(FieldEncoding::Reg(Register::AX), None),
+                            Operand::RawData(
+                                RawData::U16(u16::from_le_bytes([third_byte, fourth_byte])),
+                                None,
+                            ),
+                        ],
                     })
                 } else {
-                    self.intermediate_repr.push(DecodedMemField {
+                    self.intermediate_repr.push(Instruction {
                         opcode: opcode.unwrap(),
-                        field_one: FieldOrRawData::FieldEncoding(
-                            FieldEncoding::Reg(Register::AL),
-                            None,
-                        ),
-                        field_two: FieldOrRawData::RawData(RawData::I8(third_byte as i8), None),
+                        operands: [
+                            Operand::FieldEncoding(FieldEncoding::Reg(Register::AL), None),
+                            Operand::RawData(RawData::I8(third_byte as i8), None),
+                        ],
                     })
                 }
             } else if let Some(InstructionKind::FourBitOpcode) = kind {
@@ -82,8 +79,8 @@ impl Decoder {
                 self.append_intermediate_repr(
                     d.as_ref(),
                     opcode.unwrap(),
-                    FieldOrRawData::RawData(data.unwrap(), None),
-                    FieldOrRawData::FieldEncoding(reg_field, None),
+                    Operand::RawData(data.unwrap(), None),
+                    Operand::FieldEncoding(reg_field, None),
                 );
             } else if let Some(InstructionKind::SixBitOpcode) = kind {
                 d = Some((&byte << 6) >> 7);
@@ -108,7 +105,7 @@ impl Decoder {
                 // 11 - register mode
                 match mode {
                     0 => {
-                        let mut field1: Option<FieldOrRawData> = None;
+                        let mut field1: Option<Operand> = None;
                         let mut explicit_size: Option<ExplicitSize> = None;
                         let field2 = Decoder::get_rm_field(&rm, None);
                         if let None = d {
@@ -117,17 +114,16 @@ impl Decoder {
                                 // if s:w = 01 ??
                                 explicit_size = Some(ExplicitSize::Word);
                                 let fourth_byte = self.instruction_queue.pop_front().unwrap();
-                                field1 = Some(FieldOrRawData::RawData(
+                                field1 = Some(Operand::RawData(
                                     RawData::U16(u16::from_le_bytes([third_byte, fourth_byte])),
                                     None,
                                 ))
                             } else {
                                 explicit_size = Some(ExplicitSize::Byte);
-                                field1 =
-                                    Some(FieldOrRawData::RawData(RawData::U8(third_byte), None));
+                                field1 = Some(Operand::RawData(RawData::U8(third_byte), None));
                             }
                         } else {
-                            field1 = Some(FieldOrRawData::FieldEncoding(
+                            field1 = Some(Operand::FieldEncoding(
                                 Decoder::get_reg_field(&reg, &w.unwrap()),
                                 None,
                             ));
@@ -137,7 +133,7 @@ impl Decoder {
                             d.as_ref(),
                             opcode.unwrap(),
                             field1.unwrap(),
-                            FieldOrRawData::FieldEncoding(field2, explicit_size),
+                            Operand::FieldEncoding(field2, explicit_size),
                         );
                     }
                     1 => {
@@ -149,8 +145,8 @@ impl Decoder {
                         self.append_intermediate_repr(
                             d.as_ref(),
                             opcode.unwrap(),
-                            FieldOrRawData::FieldEncoding(field1, None), //Todo handle immediate to reg
-                            FieldOrRawData::FieldEncoding(field2, None),
+                            Operand::FieldEncoding(field1, None),
+                            Operand::FieldEncoding(field2, None),
                         );
                     }
                     2 => {
@@ -159,7 +155,7 @@ impl Decoder {
                         let fourth_byte = self.instruction_queue.pop_front().unwrap();
                         let displacement = i16::from_le_bytes([third_byte, fourth_byte]);
 
-                        let mut field1: Option<FieldOrRawData> = None;
+                        let mut field1: Option<Operand> = None;
                         let field2 = Decoder::get_rm_field(&rm, Some(displacement));
 
                         if let None = d {
@@ -167,17 +163,16 @@ impl Decoder {
                             if w == Some(1) && s == Some(0) {
                                 explicit_size = Some(ExplicitSize::Word);
                                 let sixth_byte = self.instruction_queue.pop_front().unwrap();
-                                field1 = Some(FieldOrRawData::RawData(
+                                field1 = Some(Operand::RawData(
                                     RawData::U16(u16::from_le_bytes([fifth_byte, sixth_byte])),
                                     None,
                                 ))
                             } else {
                                 explicit_size = Some(ExplicitSize::Byte);
-                                field1 =
-                                    Some(FieldOrRawData::RawData(RawData::U8(fifth_byte), None));
+                                field1 = Some(Operand::RawData(RawData::U8(fifth_byte), None));
                             }
                         } else {
-                            field1 = Some(FieldOrRawData::FieldEncoding(
+                            field1 = Some(Operand::FieldEncoding(
                                 Decoder::get_reg_field(&reg, &w.unwrap()),
                                 None,
                             ));
@@ -187,30 +182,27 @@ impl Decoder {
                             d.as_ref(),
                             opcode.unwrap(),
                             field1.unwrap(),
-                            FieldOrRawData::FieldEncoding(field2, explicit_size),
+                            Operand::FieldEncoding(field2, explicit_size),
                         );
                     }
                     3 => {
-                        let mut field1: Option<FieldOrRawData> = None;
-                        let field2 = FieldOrRawData::FieldEncoding(
-                            Decoder::get_reg_field(&rm, &w.unwrap()),
-                            None,
-                        );
+                        let mut field1: Option<Operand> = None;
+                        let field2 =
+                            Operand::FieldEncoding(Decoder::get_reg_field(&rm, &w.unwrap()), None);
                         if let None = d {
                             let third_byte = self.instruction_queue.pop_front().unwrap();
                             if w == Some(1) && s == Some(0) {
                                 // if s:w = 01 ??
                                 let fourth_byte = self.instruction_queue.pop_front().unwrap();
-                                field1 = Some(FieldOrRawData::RawData(
+                                field1 = Some(Operand::RawData(
                                     RawData::U16(u16::from_le_bytes([third_byte, fourth_byte])),
                                     None,
                                 ))
                             } else {
-                                field1 =
-                                    Some(FieldOrRawData::RawData(RawData::U8(third_byte), None));
+                                field1 = Some(Operand::RawData(RawData::U8(third_byte), None));
                             }
                         } else {
-                            field1 = Some(FieldOrRawData::FieldEncoding(
+                            field1 = Some(Operand::FieldEncoding(
                                 Decoder::get_reg_field(&reg, &w.unwrap()),
                                 None,
                             ));
@@ -243,20 +235,18 @@ impl Decoder {
         &mut self,
         d: Option<&u8>,
         opcode: Opcode,
-        field_reg: FieldOrRawData,
-        field_rm: FieldOrRawData,
+        field_reg: Operand,
+        field_rm: Operand,
     ) {
         match d {
-            Some(1) => self.intermediate_repr.push(DecodedMemField {
+            Some(1) => self.intermediate_repr.push(Instruction {
                 opcode,
-                field_one: field_reg,
-                field_two: field_rm,
+                operands: [field_reg, field_rm],
             }),
             // if d is not specified, the rm field is the destination (immediate to reg/memory) so reg field will be RawData
-            _ => self.intermediate_repr.push(DecodedMemField {
+            _ => self.intermediate_repr.push(Instruction {
                 opcode,
-                field_one: field_rm,
-                field_two: field_reg,
+                operands: [field_rm, field_reg],
             }),
         }
     }
@@ -420,25 +410,30 @@ pub enum Register {
 }
 
 #[derive(Debug)]
-pub struct DecodedMemField {
+pub struct Instruction {
     pub opcode: Opcode,
-    pub field_one: FieldOrRawData,
-    pub field_two: FieldOrRawData,
+    pub operands: [Operand; 2],
+    // pub field_one: Operand,
+    // pub field_two: Operand,
 }
 
-impl std::fmt::Display for DecodedMemField {
+impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}, {}", self.opcode, self.field_one, self.field_two)
+        write!(
+            f,
+            "{} {}, {}",
+            self.opcode, self.operands[0], self.operands[1]
+        )
     }
 }
 
-impl PartialEq for DecodedMemField {
+impl PartialEq for Instruction {
     fn eq(&self, other: &Self) -> bool {
         if self.opcode != other.opcode {
             return false;
-        } else if self.field_one != other.field_one {
+        } else if self.operands[0] != other.operands[0] {
             return false;
-        } else if self.field_two != other.field_two {
+        } else if self.operands[1] != other.operands[1] {
             return false;
         }
         true
@@ -446,19 +441,19 @@ impl PartialEq for DecodedMemField {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum FieldOrRawData {
+pub enum Operand {
     FieldEncoding(FieldEncoding, Option<ExplicitSize>),
     RawData(RawData, Option<ExplicitSize>),
 }
 
-impl std::fmt::Display for FieldOrRawData {
+impl std::fmt::Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FieldOrRawData::FieldEncoding(val, size) => match size {
+            Operand::FieldEncoding(val, size) => match size {
                 Some(size) => write!(f, "{} {}", size, val),
                 None => write!(f, "{}", val),
             },
-            FieldOrRawData::RawData(val, size) => match size {
+            Operand::RawData(val, size) => match size {
                 Some(size) => write!(f, "{} {}", size, val),
                 None => write!(f, "{}", val),
             },
