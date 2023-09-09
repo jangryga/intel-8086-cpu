@@ -1,4 +1,3 @@
-use crate::instruction_table::INSTRUCTION_SET;
 use lowercase_display_derive::LowercaseDisplay;
 use std::collections::VecDeque;
 use std::fs;

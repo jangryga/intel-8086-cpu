@@ -1,5 +1,6 @@
-use fake_cpu::memory::{load_memory_from_file, Memory};
+use fake_cpu::sim86_memory::{load_memory_from_file, Memory, SegmentAccess};
 use std::{env, path::{PathBuf}};
+use fake_cpu::sim86::{dis_asm8086};
 
 fn main() {
     let mut memory = Memory::new();
@@ -14,13 +15,11 @@ fn main() {
         let mut bytes_read = load_memory_from_file(&path_buf,&mut memory, 0);
 
         match bytes_read {
-            Ok(bytes) => println!("read {} bytes", bytes),
+            Ok(bytes) => {
+                println!("read {} bytes", bytes);
+                dis_asm8086(&memory, bytes, SegmentAccess {segment_base: 0, segment_offset: 0})
+            },
             Err(e) => println!("{}", e),
-        }
-        for byte in memory.bytes {
-            if byte != 0 {
-                print!("{}", byte as char);
-            }
         }
     }
 }

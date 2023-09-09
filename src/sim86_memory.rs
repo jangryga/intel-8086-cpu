@@ -49,21 +49,3 @@ pub fn load_memory_from_file(file_path: &Path, memory: &mut Memory, at_offset: u
         }
     }
 }
-
-// pub fn load_memory_from_file(file_name: &Path, memory: &Memory, at_offset: usize) -> std::io::Result<usize> {
-//     if at_offset < memory.bytes.len() {
-//         match File::open(file_name) {
-//             Ok(mut file) => {
-//                 // let mut file = File::open(file_name)?;
-//                 let bytes_read = file.read(&mut memory.bytes[at_offset..])?;
-//                 Ok(bytes_read)
-//             },
-//             Err(e) => {
-//                 writeln!(io::stderr(), "ERROR: Unable to open {:?}.", file_name).ok();
-//                 Err(e)
-//             }
-//         }
-//     } else {
-//         Ok(0)
-//     }
-// }

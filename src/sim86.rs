@@ -1,8 +1,9 @@
-use crate::memory;
-use crate::instruction_table;
+use crate::sim86_instruction_table;
+use crate::sim86_memory::Memory;
+use crate::sim86_memory::SegmentAccess;
 // use std::sync::Mutex;
 
-struct Context {
+pub struct Context {
     offset: u32
 }
 
@@ -12,4 +13,4 @@ struct Context {
 
 // fn decode_instruction
 
-fn dis_asm8086() {}
+pub fn dis_asm8086(memory: &Memory, dis_asm_byte_count: u32, segmented_access: SegmentAccess) {}
