@@ -1,18 +1,26 @@
-use fake_cpu::instruction_decode::*;
-use std::env;
-use std::fs;
+use fake_cpu::memory::{load_memory_from_file, Memory};
+use std::{env, path::{PathBuf}};
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let mut memory = Memory::new();
 
-    let file_name = &args[1];
+    let args = env::args().collect::<Vec<_>>();
+    if args.len() == 1 {
+        eprintln!("USAGE: {} [8086 machine code file] ...", args[0]);
+        return
+    }
+    for file_name in &args[1..] {
+        let mut path_buf: PathBuf = file_name.into();
+        let mut bytes_read = load_memory_from_file(&path_buf,&mut memory, 0);
 
-    let mut file_content = fs::read(file_name).expect("this should work");
-    file_content.reverse();
-
-    let mut p = Decoder::new();
-    let _ = p.load(file_name);
-    p.dump_memory();
-    p.decode();
-    p.execute();
+        match bytes_read {
+            Ok(bytes) => println!("read {} bytes", bytes),
+            Err(e) => println!("{}", e),
+        }
+        for byte in memory.bytes {
+            if byte != 0 {
+                print!("{}", byte as char);
+            }
+        }
+    }
 }
